@@ -1,0 +1,19 @@
+# 项目文件树
+
+```
+{{.Tree}}
+```
+
+{{- if .Files}}
+# 文件代码
+
+{{- range .Files}}
+## {{.Path}}
+
+```{{.Lang}}
+{{.Content}}
+```
+
+{{- end}}
+{{- end}}
+{{.Prompt}}
