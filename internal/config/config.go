@@ -77,7 +77,9 @@ func Init(rootDir string) error {
 }
 
 func SanitizePath(p string) string {
-	return filepath.ToSlash(strings.TrimSpace(p))
+	p = strings.TrimSpace(p)
+	p = strings.ReplaceAll(p, `\`, `/`)
+	return p
 }
 
 func sanitizePathList(paths []string) []string {
