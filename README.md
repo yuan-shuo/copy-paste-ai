@@ -1,6 +1,6 @@
 # Copy-Paste AI 🤖📋
 
-> **我们不生产 token，我们只是 token 的搬运工** (*^_^*)
+**我们不生产 token，我们只是 token 的搬运工** (*^_^*)
 
 [![CI](https://github.com/yuan-shuo/copy-paste-ai/workflows/ci/badge.svg)](https://github.com/yuan-shuo/copy-paste-ai/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/yuan-shuo/copy-paste-ai/branch/main/graph/badge.svg)](https://codecov.io/gh/yuan-shuo/copy-paste-ai)
@@ -8,7 +8,14 @@
 
 ---
 
-以下内容大部分由AI帮我生成，因为我懒，如果你看完绷住了，你可以给我10万美元。
+
+<p align="center">
+—— 以下内容大部分由AI帮我生成，因为我懒，如果你看完绷住了，你可以给我10万美元。
+</p>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/yuan-shuo/image-repo/main/joy-1.jpg" alt="" width="500">
+</div>
 
 ## 宇宙级项目介绍
 
