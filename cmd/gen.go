@@ -43,55 +43,19 @@ func runGen(cmd *cobra.Command, args []string) {
 	cfg := config.Load(rootDir)
 
 	filesFlag, _ := cmd.Flags().GetString("files")
+	fileList := parseFilesFlag(filesFlag, cfg)
+	fileList = mergeDefaultFiles(fileList, cfg)
 
-	var fileList []string
-	if filesFlag != "" {
-		parts := strings.Split(filesFlag, ",")
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				if expanded, ok := cfg.FileAliases[p]; ok {
-					fileList = append(fileList, expanded...)
-				} else {
-					fileList = append(fileList, p)
-				}
-			}
-		}
-	}
-
-	existing := make(map[string]bool)
-	for _, f := range fileList {
-		existing[f] = true
-	}
-	for _, f := range cfg.Default.Files {
-		if !existing[f] {
-			fileList = append(fileList, f)
-		}
-	}
-
-	if len(fileList) > 0 {
-		for _, relPath := range fileList {
-			fullPath := filepath.Join(rootDir, relPath)
-			if _, err := os.Stat(fullPath); err != nil {
-				fmt.Fprintf(os.Stderr, "错误: 文件不存在: %s\n", relPath)
-				os.Exit(1)
-			}
-		}
+	if err := validateFileList(fileList, rootDir); err != nil {
+		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+		os.Exit(1)
 	}
 
 	gitignoreEnabled := true
 	if cfg.Gitignore.Enabled != nil {
 		gitignoreEnabled = *cfg.Gitignore.Enabled
 	}
-
-	var matcher *gitignore.Matcher
-	if gitignoreEnabled {
-		var err error
-		matcher, err = gitignore.NewMatcherFromFile(rootDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
-		}
-	}
+	matcher := buildGitignoreMatcher(rootDir, gitignoreEnabled)
 
 	treeStr := tree.Generate(rootDir, gitignoreEnabled, matcher)
 
@@ -127,4 +91,60 @@ func runGen(cmd *cobra.Command, args []string) {
 	if len(fileList) > 0 {
 		fmt.Printf("包含文件: %v\n", fileList)
 	}
+}
+
+func parseFilesFlag(filesFlag string, cfg config.Config) []string {
+	if filesFlag == "" {
+		return nil
+	}
+
+	var fileList []string
+	parts := strings.Split(filesFlag, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if expanded, ok := cfg.FileAliases[p]; ok {
+			fileList = append(fileList, expanded...)
+		} else {
+			fileList = append(fileList, p)
+		}
+	}
+	return fileList
+}
+
+func mergeDefaultFiles(fileList []string, cfg config.Config) []string {
+	existing := make(map[string]bool)
+	for _, f := range fileList {
+		existing[f] = true
+	}
+	for _, f := range cfg.Default.Files {
+		if !existing[f] {
+			fileList = append(fileList, f)
+		}
+	}
+	return fileList
+}
+
+func validateFileList(fileList []string, rootDir string) error {
+	for _, relPath := range fileList {
+		fullPath := filepath.Join(rootDir, relPath)
+		if _, err := os.Stat(fullPath); err != nil {
+			return fmt.Errorf("文件不存在: %s", relPath)
+		}
+	}
+	return nil
+}
+
+func buildGitignoreMatcher(rootDir string, enabled bool) *gitignore.Matcher {
+	if !enabled {
+		return nil
+	}
+	matcher, err := gitignore.NewMatcherFromFile(rootDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "警告: %v\n", err)
+		return nil
+	}
+	return matcher
 }

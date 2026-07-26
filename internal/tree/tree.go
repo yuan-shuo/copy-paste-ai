@@ -19,11 +19,7 @@ func Generate(rootDir string, gitignoreEnabled bool, m *gitignore.Matcher) strin
 			return nil
 		}
 
-		if d.IsDir() && d.Name() == ".cpa" {
-			return fs.SkipDir
-		}
-
-		if d.IsDir() && d.Name() == ".git" {
+		if d.IsDir() && (d.Name() == ".cpa" || d.Name() == ".git") {
 			return fs.SkipDir
 		}
 
@@ -32,80 +28,20 @@ func Generate(rootDir string, gitignoreEnabled bool, m *gitignore.Matcher) strin
 			return nil
 		}
 
-		if gitignoreEnabled {
-			if shouldIgnore(relPath, d.IsDir(), m) {
-				if d.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
+		if gitignoreEnabled && shouldIgnore(relPath, d.IsDir(), m) {
+			if d.IsDir() {
+				return fs.SkipDir
 			}
+			return nil
 		}
 
 		depth := strings.Count(relPath, string(filepath.Separator))
 		prefix := strings.Repeat("    ", depth)
-
-		parent := filepath.Dir(relPath)
-		entries, err := os.ReadDir(filepath.Join(rootDir, parent))
-		if err != nil {
-			return nil
-		}
-
-		var names []string
-		for _, e := range entries {
-			if e.Name() == ".cpa" || e.Name() == ".git" {
-				continue
-			}
-			eRelPath, _ := filepath.Rel(rootDir, filepath.Join(parent, e.Name()))
-			if gitignoreEnabled {
-				if shouldIgnore(eRelPath, e.IsDir(), m) {
-					continue
-				}
-			}
-			names = append(names, e.Name())
-		}
-
-		isLast := false
-		for i, name := range names {
-			if name == d.Name() {
-				if i == len(names)-1 {
-					isLast = true
-				}
-				break
-			}
-		}
-
-		connector := "├── "
-		if isLast {
-			connector = "└── "
-		}
-
-		if depth == 0 {
-			rootEntries, err := os.ReadDir(rootDir)
-			if err == nil {
-				var rootNames []string
-				for _, e := range rootEntries {
-					if e.Name() == ".cpa" || e.Name() == ".git" {
-						continue
-					}
-					eRelPath, _ := filepath.Rel(rootDir, filepath.Join(rootDir, e.Name()))
-					if gitignoreEnabled {
-						if shouldIgnore(eRelPath, e.IsDir(), m) {
-							continue
-						}
-					}
-					rootNames = append(rootNames, e.Name())
-				}
-				for i, name := range rootNames {
-					if name == d.Name() && i == len(rootNames)-1 {
-						connector = "└── "
-					}
-				}
-			}
-		}
+		connector := findConnector(rootDir, filepath.Dir(relPath), d.Name(), gitignoreEnabled, m)
 
 		name := d.Name()
 		if d.IsDir() {
-			name = name + "/"
+			name += "/"
 		}
 
 		builder.WriteString(prefix)
@@ -117,6 +53,42 @@ func Generate(rootDir string, gitignoreEnabled bool, m *gitignore.Matcher) strin
 	})
 
 	return builder.String()
+}
+
+func listFilteredDir(dir, rootDir string, gitignoreEnabled bool, m *gitignore.Matcher) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, e := range entries {
+		if e.Name() == ".cpa" || e.Name() == ".git" {
+			continue
+		}
+		eRelPath, _ := filepath.Rel(rootDir, filepath.Join(dir, e.Name()))
+		if gitignoreEnabled && shouldIgnore(eRelPath, e.IsDir(), m) {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	return names, nil
+}
+
+func findConnector(rootDir, parentDir, name string, gitignoreEnabled bool, m *gitignore.Matcher) string {
+	names, err := listFilteredDir(filepath.Join(rootDir, parentDir), rootDir, gitignoreEnabled, m)
+	if err != nil {
+		return "├── "
+	}
+	for i, n := range names {
+		if n == name {
+			if i == len(names)-1 {
+				return "└── "
+			}
+			break
+		}
+	}
+	return "├── "
 }
 
 func shouldIgnore(relPath string, isDir bool, m *gitignore.Matcher) bool {
