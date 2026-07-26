@@ -13,10 +13,17 @@ on:
       - '**.md'
       - 'docs/**'
       - 'scripts/**'
+  workflow_call:  # 新增：允许被其他工作流调用
+    outputs:
+      result:
+        description: "Quality gate result"
+        value: ${{ jobs.quality-gate.outputs.result }}
 
 jobs:
   quality-gate:
     runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set_result.outputs.result }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -37,3 +44,7 @@ jobs:
       - name: Run goreportcard-cli with threshold
         run: |
           goreportcard-cli -v -t 100
+
+      - name: Set result
+        id: set_result
+        run: echo "result=success" >> $GITHUB_OUTPUT

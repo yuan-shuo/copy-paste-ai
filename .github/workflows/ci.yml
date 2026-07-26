@@ -13,10 +13,20 @@ on:
       - '**.md'
       - 'docs/**'
       - 'scripts/**'
+  workflow_call:  # 新增：允许被其他工作流调用
+    outputs:
+      test_result:
+        description: "Test result"
+        value: ${{ jobs.test.outputs.result }}
+      build_result:
+        description: "Build result"
+        value: ${{ jobs.build.outputs.result }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set_result.outputs.result }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,8 +54,14 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Set result
+        id: set_result
+        run: echo "result=success" >> $GITHUB_OUTPUT
+
   build:
     runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set_result.outputs.result }}
     steps:
       - uses: actions/checkout@v6
 
@@ -61,3 +77,7 @@ jobs:
         run: |
           go build -o cpa .
           ./cpa -h || true
+
+      - name: Set result
+        id: set_result
+        run: echo "result=success" >> $GITHUB_OUTPUT
