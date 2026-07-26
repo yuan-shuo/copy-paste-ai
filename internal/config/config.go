@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -45,37 +46,81 @@ func defaultConfig() Config {
 	}
 }
 
-func Load(rootDir string) Config {
+func ConfigExists(rootDir string) bool {
+	configPath := filepath.Join(rootDir, ".cpa", "config.toml")
+	_, err := os.Stat(configPath)
+	return err == nil
+}
+
+func Init(rootDir string) error {
 	cpaDir := filepath.Join(rootDir, ".cpa")
 	configPath := filepath.Join(cpaDir, "config.toml")
 
-	defaultCfg := defaultConfig()
-
 	if err := os.MkdirAll(cpaDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "警告: 创建 .cpa 目录失败: %v\n", err)
-		return defaultCfg
+		return fmt.Errorf("创建 .cpa 目录失败: %w", err)
 	}
 
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		if err := os.WriteFile(configPath, []byte(assets.ConfigTemplate()), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "警告: 写入默认配置文件失败: %v\n", err)
-		}
-		fmt.Printf("已创建默认配置文件（所有配置已注释）: %s\n", configPath)
-		fmt.Println("提示: 编辑该文件取消注释以启用配置")
-		return defaultCfg
+	if err := os.WriteFile(configPath, []byte(assets.ConfigTemplate()), 0644); err != nil {
+		return fmt.Errorf("写入默认配置文件失败: %w", err)
 	}
+
+	cpaGitignorePath := filepath.Join(cpaDir, ".gitignore")
+	if _, err := os.Stat(cpaGitignorePath); os.IsNotExist(err) {
+		if err := os.WriteFile(cpaGitignorePath, []byte("*\n"), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 写入 .cpa/.gitignore 失败: %v\n", err)
+		}
+	}
+
+	fmt.Printf("已创建默认配置文件: %s\n", configPath)
+	fmt.Println("提示: 编辑该文件取消注释以启用配置")
+	return nil
+}
+
+func SanitizePath(p string) string {
+	return filepath.ToSlash(strings.TrimSpace(p))
+}
+
+func sanitizePathList(paths []string) []string {
+	result := make([]string, len(paths))
+	for i, p := range paths {
+		result[i] = SanitizePath(p)
+	}
+	return result
+}
+
+func sanitizeAliasMap(aliases map[string][]string) map[string][]string {
+	result := make(map[string][]string, len(aliases))
+	for k, v := range aliases {
+		result[k] = sanitizePathList(v)
+	}
+	return result
+}
+
+func preprocessToml(data []byte) []byte {
+	content := string(data)
+	content = strings.ReplaceAll(content, `\`, `/`)
+	return []byte(content)
+}
+
+func Load(rootDir string) Config {
+	configPath := filepath.Join(rootDir, ".cpa", "config.toml")
+	defaultCfg := defaultConfig()
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "警告: 读取配置文件失败: %v，使用默认配置\n", err)
 		return defaultCfg
 	}
 
+	cleaned := preprocessToml(data)
+
 	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+	if err := toml.Unmarshal(cleaned, &cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "警告: 解析配置文件失败: %v，使用默认配置\n", err)
 		return defaultCfg
 	}
+
+	cfg.Default.Files = sanitizePathList(cfg.Default.Files)
+	cfg.FileAliases = sanitizeAliasMap(cfg.FileAliases)
 
 	if cfg.Prompt.Content == "" {
 		cfg.Prompt.Content = defaultCfg.Prompt.Content

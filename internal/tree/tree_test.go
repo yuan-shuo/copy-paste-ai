@@ -132,6 +132,161 @@ func TestGenerate_DirectorySuffix(t *testing.T) {
 	}
 }
 
+func TestGenerate_DirsBeforeFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(dir, "b_dir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "a_dir"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b_file.txt"), []byte("b"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a_file.txt"), []byte("a"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := Generate(dir, false, nil)
+	lines := strings.Split(strings.TrimRight(result, "\n"), "\n")
+
+	dirIndex := -1
+	fileIndex := -1
+	for i, line := range lines[1:] {
+		if strings.Contains(line, "a_dir/") {
+			dirIndex = i
+		}
+		if strings.Contains(line, "a_file.txt") {
+			fileIndex = i
+		}
+	}
+
+	if dirIndex == -1 || fileIndex == -1 {
+		t.Fatal("应同时包含目录和文件")
+	}
+	if dirIndex > fileIndex {
+		t.Error("目录应排在文件之前")
+	}
+}
+
+func TestGenerate_AlphabeticalSort(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(dir, "z.txt"), []byte("z"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "m.txt"), []byte("m"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := Generate(dir, false, nil)
+	lines := strings.Split(strings.TrimRight(result, "\n"), "\n")
+
+	var fileLines []string
+	for _, line := range lines[1:] {
+		if strings.Contains(line, ".txt") {
+			fileLines = append(fileLines, line)
+		}
+	}
+
+	if len(fileLines) != 3 {
+		t.Fatalf("应有3个文件行，实际: %d", len(fileLines))
+	}
+
+	extractName := func(line string) string {
+		for _, name := range []string{"a.txt", "m.txt", "z.txt"} {
+			if strings.Contains(line, name) {
+				return name
+			}
+		}
+		return ""
+	}
+
+	if extractName(fileLines[0]) != "a.txt" || extractName(fileLines[1]) != "m.txt" || extractName(fileLines[2]) != "z.txt" {
+		t.Errorf("文件应按字母序排列，实际顺序: %v", fileLines)
+	}
+}
+
+func TestGenerate_ContinuationBars(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(dir, "dir1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "dir2"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dir1", "file.txt"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := Generate(dir, false, nil)
+
+	if !strings.Contains(result, "│") {
+		t.Error("非最后一个目录应有延续线 │")
+	}
+
+	if !strings.Contains(result, "└── ") {
+		t.Error("最后一个条目应有 └── 连接器")
+	}
+
+	if !strings.Contains(result, "├── ") {
+		t.Error("非最后一个条目应有 ├── 连接器")
+	}
+}
+
+func TestGenerate_DeepNesting(t *testing.T) {
+	dir := t.TempDir()
+
+	deepDir := filepath.Join(dir, "a", "b", "c")
+	if err := os.MkdirAll(deepDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deepDir, "deep.go"), []byte("package c\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sibling.txt"), []byte("sib"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := Generate(dir, false, nil)
+
+	if !strings.Contains(result, "a/") {
+		t.Error("应包含 a/")
+	}
+	if !strings.Contains(result, "b/") {
+		t.Error("应包含 b/")
+	}
+	if !strings.Contains(result, "c/") {
+		t.Error("应包含 c/")
+	}
+	if !strings.Contains(result, "deep.go") {
+		t.Error("应包含 deep.go")
+	}
+	if !strings.Contains(result, "sibling.txt") {
+		t.Error("应包含 sibling.txt")
+	}
+
+	lines := strings.Split(strings.TrimRight(result, "\n"), "\n")
+	var cLine string
+	for _, line := range lines {
+		if strings.Contains(line, "c/") {
+			cLine = line
+			break
+		}
+	}
+	if cLine == "" {
+		t.Fatal("找不到 c/ 行")
+	}
+	if !strings.HasPrefix(cLine, "│       ") {
+		t.Errorf("c/ 应有正确的延续线缩进，实际: %s", cLine)
+	}
+}
+
 func TestShouldIgnore(t *testing.T) {
 	if !shouldIgnore(".git", true, nil) {
 		t.Error(".git 目录应被忽略")

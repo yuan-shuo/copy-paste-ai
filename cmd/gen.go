@@ -40,6 +40,14 @@ func runGen(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if !config.ConfigExists(rootDir) {
+		fmt.Println("未找到配置文件，自动初始化...")
+		if err := config.Init(rootDir); err != nil {
+			fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	cfg := config.Load(rootDir)
 
 	filesFlag, _ := cmd.Flags().GetString("files")
@@ -63,12 +71,6 @@ func runGen(cmd *cobra.Command, args []string) {
 	promptDir := filepath.Join(cpaDir, "prompt")
 	if err := os.MkdirAll(promptDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "创建目录失败: %v\n", err)
-		os.Exit(1)
-	}
-
-	gitignorePath := filepath.Join(cpaDir, ".gitignore")
-	if err := os.WriteFile(gitignorePath, []byte("*\n"), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "创建 .gitignore 失败: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -101,7 +103,7 @@ func parseFilesFlag(filesFlag string, cfg config.Config) []string {
 	var fileList []string
 	parts := strings.Split(filesFlag, ",")
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
+		p = config.SanitizePath(p)
 		if p == "" {
 			continue
 		}
@@ -128,11 +130,15 @@ func mergeDefaultFiles(fileList []string, cfg config.Config) []string {
 }
 
 func validateFileList(fileList []string, rootDir string) error {
+	var missing []string
 	for _, relPath := range fileList {
-		fullPath := filepath.Join(rootDir, relPath)
+		fullPath := filepath.Join(rootDir, filepath.FromSlash(relPath))
 		if _, err := os.Stat(fullPath); err != nil {
-			return fmt.Errorf("文件不存在: %s", relPath)
+			missing = append(missing, relPath)
 		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("以下文件不存在: %v", missing)
 	}
 	return nil
 }

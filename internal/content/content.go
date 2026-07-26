@@ -27,12 +27,12 @@ type RenderData struct {
 func Build(tree, rootDir string, fileList []string, cfg config.Config) (string, error) {
 	var files []FileData
 	for _, relPath := range fileList {
-		fullPath := filepath.Join(rootDir, relPath)
+		fullPath := filepath.Join(rootDir, filepath.FromSlash(relPath))
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			continue
 		}
-		ext := filepath.Ext(relPath)
+		ext := filepath.Ext(fullPath)
 		lang := strings.TrimPrefix(ext, ".")
 		if lang == "" {
 			lang = "text"

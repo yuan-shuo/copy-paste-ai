@@ -20,10 +20,12 @@ func main() {
 方便将项目信息粘贴给 AI 进行分析和开发。
 
 子命令:
-  gen   生成 .md 文件（原有功能）
+  init  初始化配置文件
+  gen   生成 .md 文件
   tree  在终端打印文件树`,
 	}
 
+	rootCmd.AddCommand(cmd.NewInitCmd())
 	rootCmd.AddCommand(cmd.NewGenCmd())
 	rootCmd.AddCommand(cmd.NewTreeCmd())
 
